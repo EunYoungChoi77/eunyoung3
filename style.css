@@ -223,3 +223,29 @@ body{
   .project-screen .project-card,
   .project-screen-first .project-card{max-height:none}
 }
+
+/* Repeating motion while the hero is visible. The main entrance/highlighter
+   still restarts each time the section re-enters the viewport. */
+.hero-title.visible .outline:after{
+  animation:type-shine-loop 5.2s cubic-bezier(.2,.8,.2,1) 1.35s infinite;
+}
+.hero-title.visible em:after{
+  animation:
+    highlight-swipe .9s cubic-bezier(.2,.8,.2,1) .72s both,
+    highlight-soft-glow 3.6s ease-in-out 1.8s infinite;
+}
+@keyframes type-shine-loop{
+  0%,58%{transform:translateX(-120%);opacity:0}
+  61%{opacity:.95}
+  82%{transform:translateX(120%);opacity:.95}
+  83%,100%{transform:translateX(120%);opacity:0}
+}
+@keyframes highlight-soft-glow{
+  0%,100%{filter:saturate(1) brightness(1)}
+  50%{filter:saturate(1.18) brightness(1.08)}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .hero-title.visible .outline:after,
+  .hero-title.visible em:after{animation:none!important}
+}

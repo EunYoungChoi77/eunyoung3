@@ -88,14 +88,26 @@ document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && modal.classList.contains('open')) closeProject();
 });
 
+// Reveal animations replay whenever an element leaves the screen and comes back.
+// The class is removed only after the element is fully outside the viewport,
+// so animations do not flicker while the user is slowly scrolling.
 const observer = new IntersectionObserver(entries => {
   entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      entry.target.classList.add('visible');
-      observer.unobserve(entry.target);
+    const element = entry.target;
+
+    if (entry.isIntersecting && entry.intersectionRatio >= 0.16) {
+      element.classList.add('visible');
+      return;
     }
+
+    const fullyAbove = entry.boundingClientRect.bottom < -48;
+    const fullyBelow = entry.boundingClientRect.top > window.innerHeight + 48;
+    if (fullyAbove || fullyBelow) element.classList.remove('visible');
   });
-}, { threshold: 0.13 });
+}, {
+  threshold: [0, 0.16],
+  rootMargin: '-3% 0px -6% 0px'
+});
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
 const menuButton = document.querySelector('.menu-button');
@@ -227,12 +239,18 @@ function observeModalFigures() {
   if (modalFigureObserver) modalFigureObserver.disconnect();
   modalFigureObserver = new IntersectionObserver(entries => {
     entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('visible');
-        modalFigureObserver.unobserve(entry.target);
+      const figure = entry.target;
+      if (entry.isIntersecting && entry.intersectionRatio >= .12) {
+        figure.classList.add('visible');
+        return;
       }
+
+      const modalRect = modal.getBoundingClientRect();
+      const fullyAbove = entry.boundingClientRect.bottom < modalRect.top - 32;
+      const fullyBelow = entry.boundingClientRect.top > modalRect.bottom + 32;
+      if (fullyAbove || fullyBelow) figure.classList.remove('visible');
     });
-  }, { root: modal, threshold: .12 });
+  }, { root: modal, threshold: [0, .12], rootMargin: '-3% 0px -5% 0px' });
   modal.querySelectorAll('.modal-reveal').forEach(figure => modalFigureObserver.observe(figure));
 }
 
