@@ -123,3 +123,52 @@ body.modal-open{overflow:hidden}
 @media(prefers-reduced-motion:reduce){.hero:before,.hero:after,.hero-orbs span,.contact:before{animation:none!important}.scroll-progress{display:none}.project-card{transform:none!important}.modal-gallery figure.modal-reveal{opacity:1;transform:none}}
 
 .round-link,.contact-row a,.modal-close{overflow:hidden}
+
+
+/* ===== Full-screen section & reliable project image update ===== */
+:root{--header-height:63px}
+html{scroll-snap-type:y proximity;scroll-padding-top:var(--header-height)}
+.hero,.about,.process,.contact,.project-screen{scroll-snap-align:start;scroll-margin-top:var(--header-height)}
+
+/* Each main section occupies one clear browser viewport. */
+.about,.process{min-height:100svh;display:flex;flex-direction:column;justify-content:center;padding-top:calc(var(--header-height) + 44px);padding-bottom:58px}
+.about-grid{margin-top:clamp(42px,5vh,70px)}
+.process-list{margin-top:clamp(38px,5vh,62px)}
+.contact{min-height:calc(100svh - 48px);padding-top:calc(var(--header-height) + 42px);padding-bottom:58px}
+.contact h2{margin:clamp(52px,9vh,88px) 0 clamp(62px,10vh,96px)}
+
+/* Work is split into two full viewport panels while preserving the original card layout. */
+.work{padding-top:0;padding-bottom:0}
+.project-screen{min-height:100svh;display:flex;flex-direction:column;justify-content:center;padding-top:calc(var(--header-height) + 34px);padding-bottom:34px}
+.project-screen-first{justify-content:flex-start}
+.project-screen .work-heading{width:min(100%,1280px);margin:0 auto clamp(24px,3vh,38px)}
+.project-screen .project-card{width:min(100%,1280px);height:auto;max-height:calc(100svh - var(--header-height) - 88px);margin:0 auto;display:flex;flex-direction:column;flex:0 1 auto}
+.project-screen-first .project-card{max-height:calc(100svh - var(--header-height) - 150px)}
+.project-screen .project-image{height:auto;min-height:0;aspect-ratio:16 / 9;flex:1 1 auto;background:#e2e2e2}
+.project-screen .project-image img{width:100%;height:100%;object-fit:cover;object-position:center}
+.project-screen .project-meta{flex:0 0 auto;min-height:102px}
+
+/* Prevent the 3D motion layer from altering the image's actual measured height. */
+.project-card .project-image,.project-card .project-meta{backface-visibility:hidden}
+
+@media(max-height:820px) and (min-width:851px){
+  .about,.process{padding-top:calc(var(--header-height) + 28px);padding-bottom:34px}
+  .about-grid{margin-top:32px}.about h2{font-size:clamp(34px,4.45vw,66px)}
+  .project-screen{padding-top:calc(var(--header-height) + 20px);padding-bottom:20px}
+  .project-screen .work-heading{margin-bottom:20px}
+  .project-screen .project-card{max-width:1120px;max-height:calc(100svh - var(--header-height) - 52px)}
+  .project-screen-first .project-card{max-height:calc(100svh - var(--header-height) - 112px)}
+  .project-screen .project-meta{min-height:88px;padding-top:15px}
+  .project-meta h3{font-size:clamp(34px,4.2vw,58px)}
+  .contact{padding-top:calc(var(--header-height) + 26px);padding-bottom:38px}
+  .contact h2{margin:38px 0 48px}
+}
+
+@media(max-width:850px){
+  html{scroll-snap-type:none}
+  .about,.process,.contact,.project-screen{min-height:auto;display:block;padding-top:110px;padding-bottom:100px}
+  .project-screen-first{padding-bottom:45px}.project-screen+.project-screen{padding-top:45px}
+  .project-screen .project-card,.project-screen-first .project-card{width:100%;max-height:none;height:auto}
+  .project-screen .project-image{aspect-ratio:16 / 9;height:auto}
+  .project-screen .project-meta{min-height:0}
+}
