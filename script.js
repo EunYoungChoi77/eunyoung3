@@ -40,11 +40,14 @@ const projects = {
 const modal = document.querySelector('#project-modal');
 const closeButton = document.querySelector('.modal-close');
 let lastFocused = null;
+let currentProjectKey = null;
+const projectOrder = Object.keys(projects);
 
-function openProject(key) {
+function openProject(key, options = {}) {
   const p = projects[key];
   if (!p) return;
-  lastFocused = document.activeElement;
+  currentProjectKey = key;
+  if (!options.preserveFocus) lastFocused = document.activeElement;
   document.querySelector('#modal-index').textContent = p.index;
   document.querySelector('#modal-title').textContent = p.title;
   document.querySelector('#modal-kicker').textContent = p.kicker;
@@ -56,6 +59,7 @@ function openProject(key) {
   document.querySelector('#modal-gallery').innerHTML = p.pages.map(([src, caption]) =>
     `<figure class="modal-reveal"><img src="${src}" alt="${caption}" loading="lazy"><figcaption>${caption}</figcaption></figure>`
   ).join('');
+  updateProjectNavigation(key);
   observeModalFigures();
   modal.classList.add('open');
   modal.setAttribute('aria-hidden', 'false');
@@ -85,30 +89,71 @@ modal.addEventListener('click', event => {
   if (event.target === modal) closeProject();
 });
 document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && lightbox.classList.contains('open')) {
+    closeLightbox();
+    return;
+  }
   if (event.key === 'Escape' && modal.classList.contains('open')) closeProject();
 });
 
-// Reveal animations replay whenever an element leaves the screen and comes back.
-// The class is removed only after the element is fully outside the viewport,
-// so animations do not flicker while the user is slowly scrolling.
-const observer = new IntersectionObserver(entries => {
-  entries.forEach(entry => {
-    const element = entry.target;
+// Replays every reveal/typography animation whenever the element re-enters
+// the viewport. A small central trigger zone prevents flickering while the
+// user is slowly scrolling, and the forced reflow reliably restarts Safari
+// keyframes such as the hero title and highlighter swipe.
+const revealElements = [...document.querySelectorAll('.reveal')];
+let revealTicking = false;
 
-    if (entry.isIntersecting && entry.intersectionRatio >= 0.16) {
-      element.classList.add('visible');
-      return;
-    }
+function resetReveal(element) {
+  element.dataset.revealState = 'out';
+  element.classList.add('motion-reset');
+  element.classList.remove('visible');
+  // Force the hidden starting state to be committed before the next entrance.
+  void element.offsetWidth;
+  requestAnimationFrame(() => element.classList.remove('motion-reset'));
+}
 
-    const fullyAbove = entry.boundingClientRect.bottom < -48;
-    const fullyBelow = entry.boundingClientRect.top > window.innerHeight + 48;
-    if (fullyAbove || fullyBelow) element.classList.remove('visible');
+function playReveal(element) {
+  element.dataset.revealState = 'in';
+  element.classList.add('motion-reset');
+  element.classList.remove('visible');
+  // Safari can keep the previous pseudo-element animation unless layout is read.
+  void element.offsetWidth;
+  element.classList.remove('motion-reset');
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => element.classList.add('visible'));
   });
-}, {
-  threshold: [0, 0.16],
-  rootMargin: '-3% 0px -6% 0px'
-});
-document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+}
+
+function updateRevealAnimations() {
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  const enterTop = viewportHeight * 0.88;
+  const enterBottom = viewportHeight * 0.12;
+
+  revealElements.forEach(element => {
+    const rect = element.getBoundingClientRect();
+    const isInReplayZone = rect.top < enterTop && rect.bottom > enterBottom;
+    const state = element.dataset.revealState || 'out';
+
+    if (isInReplayZone && state !== 'in') {
+      playReveal(element);
+    } else if (!isInReplayZone && state !== 'out') {
+      resetReveal(element);
+    }
+  });
+
+  revealTicking = false;
+}
+
+function requestRevealUpdate() {
+  if (revealTicking) return;
+  revealTicking = true;
+  requestAnimationFrame(updateRevealAnimations);
+}
+
+window.addEventListener('scroll', requestRevealUpdate, { passive: true });
+window.addEventListener('resize', requestRevealUpdate);
+window.addEventListener('pageshow', requestRevealUpdate);
+requestRevealUpdate();
 
 const menuButton = document.querySelector('.menu-button');
 const nav = document.querySelector('.nav');
@@ -263,3 +308,111 @@ const navObserver = new IntersectionObserver(entries => {
   navLinks.forEach(link => link.classList.toggle('active', link.getAttribute('href') === `#${visible.target.id}`));
 }, { threshold: [.25, .5, .75], rootMargin: '-20% 0px -55%' });
 sections.forEach(section => navObserver.observe(section));
+
+
+// ===== Final interaction polish =====
+const modalPrevButton = document.querySelector('.modal-prev');
+const modalNextButton = document.querySelector('.modal-next');
+const modalPrevTitle = document.querySelector('#modal-prev-title');
+const modalNextTitle = document.querySelector('#modal-next-title');
+
+function getAdjacentProject(key, direction) {
+  const index = Math.max(0, projectOrder.indexOf(key));
+  return projectOrder[(index + direction + projectOrder.length) % projectOrder.length];
+}
+
+function updateProjectNavigation(key) {
+  const prevKey = getAdjacentProject(key, -1);
+  const nextKey = getAdjacentProject(key, 1);
+  modalPrevButton.dataset.project = prevKey;
+  modalNextButton.dataset.project = nextKey;
+  modalPrevTitle.textContent = projects[prevKey].title;
+  modalNextTitle.textContent = projects[nextKey].title;
+}
+
+modalPrevButton.addEventListener('click', () => {
+  openProject(modalPrevButton.dataset.project, { preserveFocus: true });
+  modal.scrollTo({ top: 0, behavior: 'smooth' });
+});
+modalNextButton.addEventListener('click', () => {
+  openProject(modalNextButton.dataset.project, { preserveFocus: true });
+  modal.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+const lightbox = document.querySelector('#image-lightbox');
+const lightboxImage = document.querySelector('#lightbox-image');
+const lightboxCaption = document.querySelector('#lightbox-caption');
+const lightboxCount = document.querySelector('#lightbox-count');
+const lightboxClose = document.querySelector('.lightbox-close');
+const lightboxPrev = document.querySelector('.lightbox-prev');
+const lightboxNext = document.querySelector('.lightbox-next');
+const modalGallery = document.querySelector('#modal-gallery');
+let lightboxImages = [];
+let lightboxIndex = 0;
+let lightboxLastFocused = null;
+
+function syncLightbox() {
+  if (!lightboxImages.length) return;
+  const item = lightboxImages[lightboxIndex];
+  lightboxImage.style.opacity = '0';
+  lightboxImage.style.transform = 'scale(.975)';
+  requestAnimationFrame(() => {
+    lightboxImage.src = item.src;
+    lightboxImage.alt = item.alt;
+    lightboxCaption.textContent = item.caption;
+    lightboxCount.textContent = `${String(lightboxIndex + 1).padStart(2, '0')} / ${String(lightboxImages.length).padStart(2, '0')}`;
+    requestAnimationFrame(() => {
+      lightboxImage.style.opacity = '';
+      lightboxImage.style.transform = '';
+    });
+  });
+}
+
+function openLightbox(index) {
+  const figures = [...modalGallery.querySelectorAll('figure')];
+  lightboxImages = figures.map(figure => {
+    const image = figure.querySelector('img');
+    const caption = figure.querySelector('figcaption');
+    return { src: image.currentSrc || image.src, alt: image.alt || '', caption: caption?.textContent || '' };
+  });
+  if (!lightboxImages.length) return;
+  lightboxIndex = Math.min(Math.max(index, 0), lightboxImages.length - 1);
+  lightboxLastFocused = document.activeElement;
+  syncLightbox();
+  lightbox.classList.add('open');
+  lightbox.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('lightbox-open');
+  setTimeout(() => lightboxClose.focus(), 100);
+}
+
+function closeLightbox() {
+  lightbox.classList.remove('open');
+  lightbox.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('lightbox-open');
+  lightboxImage.removeAttribute('src');
+  if (lightboxLastFocused) lightboxLastFocused.focus();
+}
+
+function stepLightbox(direction) {
+  if (!lightboxImages.length) return;
+  lightboxIndex = (lightboxIndex + direction + lightboxImages.length) % lightboxImages.length;
+  syncLightbox();
+}
+
+modalGallery.addEventListener('click', event => {
+  const figure = event.target.closest('figure');
+  if (!figure) return;
+  const figures = [...modalGallery.querySelectorAll('figure')];
+  openLightbox(figures.indexOf(figure));
+});
+lightboxClose.addEventListener('click', closeLightbox);
+lightboxPrev.addEventListener('click', () => stepLightbox(-1));
+lightboxNext.addEventListener('click', () => stepLightbox(1));
+lightbox.addEventListener('click', event => {
+  if (event.target === lightbox) closeLightbox();
+});
+document.addEventListener('keydown', event => {
+  if (!lightbox.classList.contains('open')) return;
+  if (event.key === 'ArrowLeft') stepLightbox(-1);
+  if (event.key === 'ArrowRight') stepLightbox(1);
+});
